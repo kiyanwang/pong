@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Multiplayer Pong</title>
+    <style>
+      body {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background: black;
+        height: 100vh;
+        margin: 0;
+      }
+      canvas {
+        background: #111;
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="game" width="600" height="400"></canvas>
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+      const canvas = document.getElementById("game");
+      const ctx = canvas.getContext("2d");
+      const socket = io();
+
+      let playerNumber = null;
+      let keys = {};
+
+      document.addEventListener("keydown", (e) => (keys[e.key] = true));
+      document.addEventListener("keyup", (e) => (keys[e.key] = false));
+
+      socket.on("playerNumber", (num) => {
+        playerNumber = num;
+        console.log("You are Player", num);
+      });
+
+      socket.on("full", () => {
+        alert("Game is full!");
+      });
+
+      function handleInput() {
+        let speed = 0;
+        if (playerNumber === 1) {
+          if (keys["q"]) speed = -5;
+          if (keys["z"]) speed = 5;
+        } else if (playerNumber === 2) {
+          if (keys["i"]) speed = -5;
+          if (keys["m"]) speed = 5;
+        }
+        socket.emit("paddleMove", speed);
+      }
+
+      socket.on("gameState", (state) => {
+        handleInput();
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Draw ball
+        ctx.fillStyle = "red";
+        ctx.beginPath();
+        ctx.arc(state.ball.x, state.ball.y, state.ball.radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Draw paddles
+        Object.values(state.players).forEach((p) => {
+          ctx.fillStyle = "white";
+          let x = p.number === 1 ? 20 : state.width - 20 - state.paddleWidth;
+          ctx.fillRect(x, p.y, state.paddleWidth, state.paddleHeight);
+        });
+      });
+    </script>
+  </body>
+</html>
