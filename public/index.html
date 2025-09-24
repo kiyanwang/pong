@@ -1,297 +1,205 @@
-<!-- public/index.html -->
 <!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <title>Multiplayer Pong</title>
-    <style>
-      body {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        background: #111;
-        height: 100vh;
-        margin: 0;
-        font-family: monospace;
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Multiplayer Pong Arcade</title>
+  <style>
+    body {
+      background: black;
+      margin: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      overflow: hidden;
+      font-family: monospace;
+    }
+    canvas {
+      background: black;
+      border: 4px solid white;
+      display: block;
+    }
+    #restartBtn {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #222;
+      color: white;
+      border: 2px solid white;
+      padding: 10px 20px;
+      font-size: 20px;
+      font-family: monospace;
+      cursor: pointer;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas" width="800" height="600"></canvas>
+  <button id="restartBtn">Restart</button>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    const socket = io();
+
+    let playerNumber = null;
+    let serverState = null;
+    let ballTrail = [];
+    let explosions = [];
+
+    const restartBtn = document.getElementById("restartBtn");
+
+    socket.on("init", (data) => {
+      playerNumber = data.playerNumber;
+    });
+
+    socket.on("state", (state) => {
+      serverState = state;
+    });
+
+    socket.on("restart", () => {
+      restartBtn.style.display = "none";
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (playerNumber === 1) {
+        if (e.key.toLowerCase() === "q") socket.emit("move", { player: 1, dir: -1 });
+        if (e.key.toLowerCase() === "z") socket.emit("move", { player: 1, dir: 1 });
+      } else if (playerNumber === 2) {
+        if (e.key.toLowerCase() === "i") socket.emit("move", { player: 2, dir: -1 });
+        if (e.key.toLowerCase() === "m") socket.emit("move", { player: 2, dir: 1 });
       }
-      canvas {
-        background: #000;
-        border: 2px solid #eee;
-        box-shadow: 0 0 20px rgba(0, 0, 0, 0.6);
+    });
+
+    document.addEventListener("keyup", (e) => {
+      if (playerNumber === 1) {
+        if (["q","z"].includes(e.key.toLowerCase())) socket.emit("move", { player: 1, dir: 0 });
+      } else if (playerNumber === 2) {
+        if (["i","m"].includes(e.key.toLowerCase())) socket.emit("move", { player: 2, dir: 0 });
       }
-      #restartBtn {
-        position: absolute;
-        top: 18px;
-        right: 18px;
-        padding: 8px 12px;
-        display: none;
+    });
+
+    restartBtn.addEventListener("click", () => {
+      socket.emit("restart");
+    });
+
+    function createExplosion(x, y) {
+      const particles = [];
+      const colors = ["#ff4444", "#ffaa00", "#ffff44", "#ffffff"];
+      for (let i = 0; i < 30; i++) {
+        particles.push({
+          x, y,
+          vx: (Math.random() - 0.5) * 6,
+          vy: (Math.random() - 0.5) * 6,
+          radius: 3 + Math.random() * 3,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          life: 60,
+        });
       }
-    </style>
-  </head>
-  <body>
-    <canvas id="game" width="600" height="400"></canvas>
-    <button id="restartBtn">Restart</button>
+      explosions.push(particles);
+    }
 
-    <script src="/socket.io/socket.io.js"></script>
-    <script>
-      const socket = io();
-      const canvas = document.getElementById("game");
-      const ctx = canvas.getContext("2d");
-      const restartBtn = document.getElementById("restartBtn");
+    function gameLoop() {
+      requestAnimationFrame(gameLoop);
+      if (!serverState) return;
 
-      // state
-      let playerNumber = null;
-      let serverState = null;
-      let renderState = null;
-      let keys = {};
-      let ballTrail = [];
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // normalize to lowercase
-      window.addEventListener("keydown", (e) => {
-        keys[e.key.toLowerCase()] = true;
-      });
-      window.addEventListener("keyup", (e) => {
-        keys[e.key.toLowerCase()] = false;
-      });
+      const ball = serverState.ball;
 
-      socket.on("playerNumber", (n) => {
-        playerNumber = n;
-        console.log("You are player", n);
-      });
-
-      socket.on("full", () => {
-        alert("Game is full (2 players already).");
-      });
-
-      socket.on("gameStart", () => {
-        console.log("gameStart");
-        // show/hide UI
-        restartBtn.style.display = "none";
-      });
-
-      socket.on("gameOver", (d) => {
-        console.log("gameOver", d);
-        restartBtn.style.display = "block";
-      });
-
-      socket.on("playerLeft", () => {
-        console.log("playerLeft - waiting");
-      });
-
-      // IMPORTANT: keep getting a serverState even if not started
-      socket.on("gameState", (st) => {
-        serverState = st;
-        // initialize renderState the first time we receive server state
-        if (!renderState) {
-          renderState = {
-            ball: { ...(st.ball || { x: 300, y: 200, vx: 0, vy: 0, radius: 8, pausedUntil: null }) },
-            players: {
-              1: st.players[1] ? { ...st.players[1] } : { y: (st.height || 400) / 2 - (st.paddleHeight || 80) / 2, number: 1 },
-              2: st.players[2] ? { ...st.players[2] } : { y: (st.height || 400) / 2 - (st.paddleHeight || 80) / 2, number: 2 },
-            },
-            paddleHeight: st.paddleHeight,
-            paddleWidth: st.paddleWidth,
-            width: st.width,
-            height: st.height,
-            scores: st.scores,
-            gameStarted: st.gameStarted,
-            gameOver: st.gameOver,
-          };
-          console.log("renderState initialized");
-        }
-      });
-
-      restartBtn.onclick = () => {
-        socket.emit("restart");
-      };
-
-      function sendInput() {
-        let speed = 0;
-        if (playerNumber === 1) {
-          if (keys["q"]) speed = -6;
-          if (keys["z"]) speed = 6;
-        } else if (playerNumber === 2) {
-          if (keys["i"]) speed = -6;
-          if (keys["m"]) speed = 6;
-        }
-        socket.emit("paddleMove", speed);
-
-        // local prediction: move our paddle instantly
-        if (renderState && renderState.players[playerNumber]) {
-          const me = renderState.players[playerNumber];
-          me.y += speed;
-          if (me.y < 0) me.y = 0;
-          if (me.y + renderState.paddleHeight > renderState.height) {
-            me.y = renderState.height - renderState.paddleHeight;
-          }
+      // scoring explosion trigger
+      if (ball && ball.pausedUntil && Date.now() < ball.pausedUntil) {
+        if (ballTrail.length > 0) {
+          const last = ballTrail[ballTrail.length - 1];
+          createExplosion(last.x, last.y);
+          ballTrail = [];
         }
       }
 
-      function lerp(a, b, t) {
-        return a + (b - a) * t;
+      // ball trail
+      if (ball) {
+        ballTrail.push({ x: ball.x, y: ball.y });
+        if (ballTrail.length > 15) ballTrail.shift();
+      }
+      for (let i = 0; i < ballTrail.length; i++) {
+        let alpha = i / ballTrail.length;
+        ctx.fillStyle = `rgba(255, 0, 0, ${alpha * 0.6})`;
+        ctx.beginPath();
+        ctx.arc(ballTrail[i].x, ballTrail[i].y, ball.radius, 0, Math.PI * 2);
+        ctx.fill();
       }
 
-      function drawWaiting() {
-        ctx.fillStyle = "#fff";
-        ctx.font = "20px monospace";
-        ctx.textAlign = "center";
-        ctx.fillText("Waiting for another player to join...", canvas.width / 2, canvas.height / 2);
-        ctx.fillText("Open the page on another device or window.", canvas.width / 2, canvas.height / 2 + 28);
-      }
-
-      function gameLoop() {
-        // always attempt to send input
-        sendInput();
-
-        // clear canvas
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        if (!serverState) {
-          // haven't received anything from server yet
-          ctx.fillStyle = "#fff";
-          ctx.font = "18px monospace";
-          ctx.textAlign = "center";
-          ctx.fillText("Connecting to server...", canvas.width / 2, canvas.height / 2);
-          requestAnimationFrame(gameLoop);
-          return;
-        }
-
-        // if game not started -> waiting screen
-        if (!serverState.gameStarted) {
-          drawWaiting();
-          requestAnimationFrame(gameLoop);
-          return;
-        }
-
-        // init renderState if somehow missing (defensive)
-        if (!renderState) {
-          renderState = {
-            ball: { ...(serverState.ball || { x: 300, y: 200, vx: 0, vy: 0, radius: 8, pausedUntil: null }) },
-            players: {
-              1: serverState.players[1] ? { ...serverState.players[1] } : { y: canvas.height / 2 - 40, number: 1 },
-              2: serverState.players[2] ? { ...serverState.players[2] } : { y: canvas.height / 2 - 40, number: 2 },
-            },
-            paddleHeight: serverState.paddleHeight,
-            paddleWidth: serverState.paddleWidth,
-            width: serverState.width,
-            height: serverState.height,
-            scores: serverState.scores,
-            gameStarted: serverState.gameStarted,
-            gameOver: serverState.gameOver,
-          };
-        }
-
-        // reconcile server -> renderState (paddles & ball)
-        for (const n of [1, 2]) {
-          const sP = serverState.players[n];
-          if (!sP) {
-            // opponent slot empty, but keep local default
-            // no overwrite
-          } else {
-            if (!renderState.players[n]) renderState.players[n] = { ...sP };
-            // smoother correction: if it's our paddle, correct gently; opponent a bit faster
-            const t = n === playerNumber ? 0.25 : 0.4;
-            renderState.players[n].y = lerp(renderState.players[n].y, sP.y, t);
-            renderState.players[n].paddleSpeed = sP.paddleSpeed || 0;
-          }
-        }
-
-        // ball handling
-        const sBall = serverState.ball;
-        if (sBall && sBall.pausedUntil && Date.now() < sBall.pausedUntil) {
-          // during pause, snap ball closer to server center
-          renderState.ball.x = lerp(renderState.ball.x, sBall.x, 0.6);
-          renderState.ball.y = lerp(renderState.ball.y, sBall.y, 0.6);
-          renderState.ball.vx = sBall.vx;
-          renderState.ball.vy = sBall.vy;
-        } else {
-          // local prediction
-          renderState.ball.x += renderState.ball.vx;
-          renderState.ball.y += renderState.ball.vy;
-          // reconcile slowly
-          if (sBall) {
-            renderState.ball.x = lerp(renderState.ball.x, sBall.x, 0.15);
-            renderState.ball.y = lerp(renderState.ball.y, sBall.y, 0.15);
-            renderState.ball.vx = sBall.vx;
-            renderState.ball.vy = sBall.vy;
-          }
-        }
-
-        // update scores & flags
-        renderState.scores = serverState.scores;
-        renderState.gameOver = serverState.gameOver;
-        renderState.gameStarted = serverState.gameStarted;
-
-        // draw scoreboard
-        ctx.fillStyle = "#fff";
-        ctx.font = "22px monospace";
-        ctx.textAlign = "center";
-        ctx.fillText(renderState.scores[1], canvas.width * 0.25, 30);
-        ctx.fillText(renderState.scores[2], canvas.width * 0.75, 30);
-
-        // ball trail
-        ballTrail.push({ x: renderState.ball.x, y: renderState.ball.y });
-        if (ballTrail.length > 18) ballTrail.shift();
-        for (let i = 0; i < ballTrail.length; i++) {
-          const t = i / ballTrail.length;
-          const r = (renderState.ball.radius || 8) * (0.7 + 0.6 * t);
-          const alpha = 0.08 + 0.6 * t;
-          ctx.fillStyle = `rgba(255,0,0,${alpha})`;
-          ctx.beginPath();
-          ctx.arc(ballTrail[i].x, ballTrail[i].y, r, 0, Math.PI * 2);
-          ctx.fill();
-        }
-
-        // draw ball
+      // ball
+      if (ball) {
         ctx.fillStyle = "red";
         ctx.beginPath();
-        ctx.arc(renderState.ball.x, renderState.ball.y, renderState.ball.radius || 8, 0, Math.PI * 2);
+        ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
         ctx.fill();
-
-        // draw paddles
-        const p1 = renderState.players[1];
-        const p2 = renderState.players[2];
-        if (p1) {
-          ctx.fillStyle = "dodgerblue";
-          ctx.fillRect(20, p1.y, renderState.paddleWidth, renderState.paddleHeight);
-        }
-        if (p2) {
-          ctx.fillStyle = "limegreen";
-          ctx.fillRect(canvas.width - 20 - renderState.paddleWidth, p2.y, renderState.paddleWidth, renderState.paddleHeight);
-        }
-
-        // countdown when paused
-        if (sBall && sBall.pausedUntil && Date.now() < sBall.pausedUntil) {
-          const ms = sBall.pausedUntil - Date.now();
-          const sec = Math.ceil(ms / 1000);
-          ctx.fillStyle = "#fff";
-          ctx.font = "48px monospace";
-          ctx.textAlign = "center";
-          ctx.fillText(sec, canvas.width / 2, canvas.height / 2 - 12);
-          ctx.font = "14px monospace";
-          ctx.fillText("Get Ready", canvas.width / 2, canvas.height / 2 + 26);
-        }
-
-	if (renderState.gameOver) {
-	  ctx.fillStyle = "rgba(0,0,0,0.6)";
-	  ctx.fillRect(0, 0, canvas.width, canvas.height);
-	  ctx.fillStyle = "yellow";
-	  ctx.font = "36px monospace";
-
-	  const winner =
-	    serverState.scores[1] >= 11 ? 1 :
-	    serverState.scores[2] >= 11 ? 2 : "?";
-
-	  ctx.fillText(`Player ${winner} Wins!`, canvas.width / 2, canvas.height / 2 - 10);
-
-	  restartBtn.style.display = "block";
-	} else {
-	  restartBtn.style.display = "none";
-	}
-        requestAnimationFrame(gameLoop);
       }
 
-      requestAnimationFrame(gameLoop);
-    </script>
-  </body>
+      // paddles
+      Object.values(serverState.players).forEach((player) => {
+        ctx.fillStyle = player.number === 1 ? "cyan" : "magenta";
+        ctx.fillRect(
+          player.number === 1 ? 20 : canvas.width - 20 - serverState.paddleWidth,
+          player.y,
+          serverState.paddleWidth,
+          serverState.paddleHeight
+        );
+      });
+
+      // explosions
+      for (let e = explosions.length - 1; e >= 0; e--) {
+        const particles = explosions[e];
+        for (let p = particles.length - 1; p >= 0; p--) {
+          const part = particles[p];
+          part.x += part.vx;
+          part.y += part.vy;
+          part.radius *= 0.96;
+          part.life--;
+          ctx.fillStyle = part.color;
+          ctx.globalAlpha = Math.max(0, part.life / 60);
+          ctx.beginPath();
+          ctx.arc(part.x, part.y, part.radius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+          if (part.life <= 0) particles.splice(p, 1);
+        }
+        if (particles.length === 0) explosions.splice(e, 1);
+      }
+
+      // scores
+      ctx.textAlign = "center";
+      ctx.font = "64px monospace";
+
+      ctx.fillStyle = "#0ff";
+      ctx.shadowColor = "#0ff";
+      ctx.shadowBlur = 20;
+      ctx.fillText(serverState.scores[1], canvas.width * 0.25, 80);
+
+      ctx.fillStyle = "#f0f";
+      ctx.shadowColor = "#f0f";
+      ctx.fillText(serverState.scores[2], canvas.width * 0.75, 80);
+      ctx.shadowBlur = 0;
+
+      // game over overlay
+      if (serverState.gameOver) {
+        ctx.fillStyle = "rgba(0,0,0,0.6)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "yellow";
+        ctx.font = "48px monospace";
+        const winner = serverState.scores[1] >= 11 ? 1 : 2;
+        ctx.fillText(`Player ${winner} Wins!`, canvas.width / 2, canvas.height / 2 - 10);
+        restartBtn.style.display = "block";
+      } else {
+        restartBtn.style.display = "none";
+      }
+    }
+
+    gameLoop();
+  </script>
+</body>
 </html>
