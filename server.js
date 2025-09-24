@@ -6,15 +6,20 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-app.use(express.static("public")); // serve client files from /public
+app.use(express.static("public"));
+
+const WIN_SCORE = 11;
 
 const gameState = {
-  players: {}, // socket.id -> {y, paddleSpeed, number}
+  players: {},
   ball: { x: 300, y: 200, vx: 4, vy: 2, radius: 8 },
   paddleHeight: 80,
   paddleWidth: 10,
   width: 600,
   height: 400,
+  scores: { 1: 0, 2: 0 },
+  gameOver: false,
+  gameStarted: false,
 };
 
 function resetBall() {
@@ -25,9 +30,8 @@ function resetBall() {
 }
 
 io.on("connection", (socket) => {
-  console.log("A player connected:", socket.id);
+  console.log("Connected:", socket.id);
 
-  // Assign player number (1 or 2)
   const numPlayers = Object.keys(gameState.players).length;
   if (numPlayers < 2) {
     gameState.players[socket.id] = {
@@ -41,43 +45,55 @@ io.on("connection", (socket) => {
     return;
   }
 
-  socket.on("paddleMove", (speed) => {
-    if (gameState.players[socket.id]) {
-      gameState.players[socket.id].paddleSpeed = speed;
-      gameState.players[socket.id].y += speed;
+  // Start automatically when both players connected
+  if (Object.keys(gameState.players).length === 2 && !gameState.gameStarted) {
+    gameState.gameStarted = true;
+    io.sockets.emit("gameStart");
+  }
 
-      // Boundaries
-      if (gameState.players[socket.id].y < 0) {
-        gameState.players[socket.id].y = 0;
-      }
-      if (
-        gameState.players[socket.id].y + gameState.paddleHeight >
-        gameState.height
-      ) {
-        gameState.players[socket.id].y =
-          gameState.height - gameState.paddleHeight;
+  socket.on("paddleMove", (speed) => {
+    const player = gameState.players[socket.id];
+    if (player && !gameState.gameOver && gameState.gameStarted) {
+      player.paddleSpeed = speed;
+      player.y += speed;
+
+      if (player.y < 0) player.y = 0;
+      if (player.y + gameState.paddleHeight > gameState.height) {
+        player.y = gameState.height - gameState.paddleHeight;
       }
     }
   });
 
+  socket.on("restart", () => {
+    if (gameState.gameOver) {
+      gameState.scores = { 1: 0, 2: 0 };
+      gameState.gameOver = false;
+      gameState.gameStarted = true;
+      resetBall();
+      io.sockets.emit("gameStart");
+    }
+  });
+
   socket.on("disconnect", () => {
-    console.log("Player disconnected:", socket.id);
+    console.log("Disconnected:", socket.id);
     delete gameState.players[socket.id];
+    gameState.gameStarted = false; // pause until both rejoin
   });
 });
 
 function gameLoop() {
+  if (gameState.gameOver || !gameState.gameStarted) return;
+
   const ball = gameState.ball;
 
   ball.x += ball.vx;
   ball.y += ball.vy;
 
-  // Bounce top/bottom
   if (ball.y - ball.radius < 0 || ball.y + ball.radius > gameState.height) {
     ball.vy *= -1;
   }
 
-  // Paddle collision detection
+  // paddle collisions
   Object.values(gameState.players).forEach((player) => {
     let paddleX = player.number === 1 ? 20 : gameState.width - 20;
     let paddleY = player.y;
@@ -89,24 +105,39 @@ function gameLoop() {
       ball.y < paddleY + gameState.paddleHeight
     ) {
       ball.vx *= -1;
-
-      // Add effect based on paddle movement speed
       ball.vy += player.paddleSpeed * 0.5;
-
-      // Slightly increase horizontal speed
       ball.vx *= 1.05;
     }
   });
 
-  // Left/right out of bounds
-  if (ball.x < 0 || ball.x > gameState.width) {
+  // scoring
+  if (ball.x < 0) {
+    gameState.scores[2] += 1;
+    checkWinner();
+    resetBall();
+  } else if (ball.x > gameState.width) {
+    gameState.scores[1] += 1;
+    checkWinner();
     resetBall();
   }
+}
 
-  io.sockets.emit("gameState", gameState);
+function checkWinner() {
+  if (gameState.scores[1] >= WIN_SCORE) {
+    gameState.gameOver = true;
+    io.sockets.emit("gameOver", { winner: 1 });
+  } else if (gameState.scores[2] >= WIN_SCORE) {
+    gameState.gameOver = true;
+    io.sockets.emit("gameOver", { winner: 2 });
+  }
 }
 
 setInterval(gameLoop, 1000 / 60);
+
+// broadcast state at 30 FPS
+setInterval(() => {
+  io.sockets.emit("gameState", gameState);
+}, 1000 / 30);
 
 server.listen(3000, "0.0.0.0", () => {
   console.log("Server running on http://0.0.0.0:3000");
