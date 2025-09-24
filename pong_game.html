@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pong Game</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            color: #fff;
+            font-family: 'Courier New', monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        
+        .game-container {
+            text-align: center;
+        }
+        
+        .score {
+            font-size: 48px;
+            margin-bottom: 20px;
+            letter-spacing: 20px;
+        }
+        
+        canvas {
+            border: 2px solid #fff;
+            background: #000;
+        }
+        
+        .controls {
+            margin-top: 20px;
+            font-size: 14px;
+            color: #ccc;
+        }
+        
+        .controls div {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="score">
+            <span id="player1Score">0</span> - <span id="player2Score">0</span>
+        </div>
+        <canvas id="gameCanvas" width="800" height="400"></canvas>
+        <div class="controls">
+            <div>Player 1: Q (Up) / Z (Down)</div>
+            <div>Player 2: I (Up) / M (Down)</div>
+            <div>Press SPACE to start/restart | First to 11 wins!</div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const player1ScoreEl = document.getElementById('player1Score');
+        const player2ScoreEl = document.getElementById('player2Score');
+
+        // Game state
+        let gameRunning = false;
+        let player1Score = 0;
+        let player2Score = 0;
+
+        // Paddle properties
+        const paddleWidth = 10;
+        const paddleHeight = 80;
+        const paddleSpeed = 6;
+
+        // Player 1 paddle (left)
+        const player1 = {
+            x: 30,
+            y: canvas.height / 2 - paddleHeight / 2,
+            width: paddleWidth,
+            height: paddleHeight,
+            dy: 0
+        };
+
+        // Player 2 paddle (right)
+        const player2 = {
+            x: canvas.width - 30 - paddleWidth,
+            y: canvas.height / 2 - paddleHeight / 2,
+            width: paddleWidth,
+            height: paddleHeight,
+            dy: 0
+        };
+
+        // Ball properties
+        const ball = {
+            x: canvas.width / 2,
+            y: canvas.height / 2,
+            radius: 8,
+            dx: 5,
+            dy: 3,
+            baseSpeed: 5,
+            maxSpeed: 12
+        };
+
+        // Key states
+        const keys = {};
+
+        // Event listeners
+        document.addEventListener('keydown', (e) => {
+            keys[e.key.toLowerCase()] = true;
+            
+            if (e.key === ' ') {
+                e.preventDefault();
+                if (!gameRunning) {
+                    startGame();
+                }
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            keys[e.key.toLowerCase()] = false;
+        });
+
+        function startGame() {
+            gameRunning = true;
+            // Reset scores if either player has won (scored 11)
+            if (player1Score >= 11 || player2Score >= 11) {
+                player1Score = 0;
+                player2Score = 0;
+                player1ScoreEl.textContent = player1Score;
+                player2ScoreEl.textContent = player2Score;
+            }
+            resetBall();
+        }
+
+        function resetBall() {
+            ball.x = canvas.width / 2;
+            ball.y = canvas.height / 2;
+            ball.dx = Math.random() > 0.5 ? ball.baseSpeed : -ball.baseSpeed;
+            ball.dy = (Math.random() - 0.5) * 6;
+        }
+
+        function updatePaddles() {
+            // Player 1 controls (Q/Z)
+            player1.dy = 0;
+            if (keys['q']) player1.dy = -paddleSpeed;
+            if (keys['z']) player1.dy = paddleSpeed;
+
+            // Player 2 controls (I/M)
+            player2.dy = 0;
+            if (keys['i']) player2.dy = -paddleSpeed;
+            if (keys['m']) player2.dy = paddleSpeed;
+
+            // Update paddle positions
+            player1.y += player1.dy;
+            player2.y += player2.dy;
+
+            // Keep paddles within canvas bounds
+            player1.y = Math.max(0, Math.min(canvas.height - player1.height, player1.y));
+            player2.y = Math.max(0, Math.min(canvas.height - player2.height, player2.y));
+        }
+
+        function updateBall() {
+            if (!gameRunning) return;
+
+            ball.x += ball.dx;
+            ball.y += ball.dy;
+
+            // Ball collision with top and bottom walls
+            if (ball.y - ball.radius <= 0 || ball.y + ball.radius >= canvas.height) {
+                ball.dy = -ball.dy;
+            }
+
+            // Ball collision with paddles
+            // Player 1 paddle collision
+            if (ball.x - ball.radius <= player1.x + player1.width &&
+                ball.x + ball.radius >= player1.x &&
+                ball.y >= player1.y &&
+                ball.y <= player1.y + player1.height &&
+                ball.dx < 0) {
+                
+                // Calculate speed multiplier based on paddle movement
+                const paddleSpeedMultiplier = Math.abs(player1.dy) / paddleSpeed;
+                const speedBoost = 1 + (paddleSpeedMultiplier * 0.5); // Up to 50% speed boost
+                
+                ball.dx = -ball.dx;
+                const currentSpeed = Math.abs(ball.dx);
+                const newSpeed = Math.min(currentSpeed * speedBoost, ball.maxSpeed);
+                ball.dx = ball.dx > 0 ? newSpeed : -newSpeed;
+                
+                // Add some angle based on where the ball hits the paddle
+                const hitPos = (ball.y - player1.y) / player1.height;
+                ball.dy = (hitPos - 0.5) * 8;
+            }
+
+            // Player 2 paddle collision
+            if (ball.x + ball.radius >= player2.x &&
+                ball.x - ball.radius <= player2.x + player2.width &&
+                ball.y >= player2.y &&
+                ball.y <= player2.y + player2.height &&
+                ball.dx > 0) {
+                
+                // Calculate speed multiplier based on paddle movement
+                const paddleSpeedMultiplier = Math.abs(player2.dy) / paddleSpeed;
+                const speedBoost = 1 + (paddleSpeedMultiplier * 0.5); // Up to 50% speed boost
+                
+                ball.dx = -ball.dx;
+                const currentSpeed = Math.abs(ball.dx);
+                const newSpeed = Math.min(currentSpeed * speedBoost, ball.maxSpeed);
+                ball.dx = ball.dx > 0 ? newSpeed : -newSpeed;
+                
+                // Add some angle based on where the ball hits the paddle
+                const hitPos = (ball.y - player2.y) / player2.height;
+                ball.dy = (hitPos - 0.5) * 8;
+            }
+
+            // Scoring
+            if (ball.x < 0) {
+                player2Score++;
+                player2ScoreEl.textContent = player2Score;
+                if (player2Score >= 11) {
+                    gameRunning = false;
+                } else {
+                    resetBall();
+                }
+            } else if (ball.x > canvas.width) {
+                player1Score++;
+                player1ScoreEl.textContent = player1Score;
+                if (player1Score >= 11) {
+                    gameRunning = false;
+                } else {
+                    resetBall();
+                }
+            }
+        }
+
+        function draw() {
+            // Clear canvas
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw center line
+            ctx.setLineDash([5, 15]);
+            ctx.beginPath();
+            ctx.moveTo(canvas.width / 2, 0);
+            ctx.lineTo(canvas.width / 2, canvas.height);
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Draw paddles
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(player1.x, player1.y, player1.width, player1.height);
+            ctx.fillRect(player2.x, player2.y, player2.width, player2.height);
+
+            // Draw ball
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+            ctx.fillStyle = '#ff0000';  // Red color
+            ctx.fill();
+
+            // Draw start message if game not running
+            if (!gameRunning) {
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+                ctx.font = '24px Courier New';
+                ctx.textAlign = 'center';
+                
+                if (player1Score >= 11) {
+                    ctx.fillText('Player 1 Wins!', canvas.width / 2, canvas.height / 2);
+                    ctx.fillText('Press SPACE for new game', canvas.width / 2, canvas.height / 2 + 35);
+                } else if (player2Score >= 11) {
+                    ctx.fillText('Player 2 Wins!', canvas.width / 2, canvas.height / 2);
+                    ctx.fillText('Press SPACE for new game', canvas.width / 2, canvas.height / 2 + 35);
+                } else {
+                    ctx.fillText('Press SPACE to start', canvas.width / 2, canvas.height / 2 + 50);
+                }
+            }
+        }
+
+        function gameLoop() {
+            updatePaddles();
+            updateBall();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Start the game loop
+        gameLoop();
+    </script>
+</body>
+</html>
