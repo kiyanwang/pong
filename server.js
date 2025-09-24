@@ -54,6 +54,18 @@ function gameLoop() {
     ball.vy *= -1;
   }
 
+Object.values(gameState.players).forEach((player) => {
+  if (player.dir) {
+    player.y += player.dir * 7;
+    if (player.y < 0) player.y = 0;
+    if (player.y + PADDLE_HEIGHT > HEIGHT) player.y = HEIGHT - PADDLE_HEIGHT;
+    player.paddleSpeed = player.dir * 7;
+  } else {
+    player.paddleSpeed = 0;
+  }
+});
+
+
   Object.values(gameState.players).forEach((player) => {
     let paddleX = player.number === 1 ? 20 : WIDTH - 20 - PADDLE_WIDTH;
     let paddleY = player.y;
@@ -99,15 +111,13 @@ io.on("connection", (socket) => {
     socket.emit("init", { playerNumber: 0 });
   }
 
-  socket.on("move", (data) => {
-    const player = Object.values(gameState.players).find((p) => p.number === data.player);
-    if (player) {
-      player.y += data.dir * 7;
-      if (player.y < 0) player.y = 0;
-      if (player.y + PADDLE_HEIGHT > HEIGHT) player.y = HEIGHT - PADDLE_HEIGHT;
-      player.paddleSpeed = data.dir * 7;
-    }
-  });
+
+	socket.on("move", (data) => {
+	  const player = Object.values(gameState.players).find((p) => p.number === data.player);
+	  if (player) {
+	    player.dir = data.dir; // just store direction (-1, 0, 1)
+	  }
+	});
 
   socket.on("restart", () => {
     gameState.scores = { 1: 0, 2: 0 };
