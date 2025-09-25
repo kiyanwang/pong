@@ -30,7 +30,7 @@ This is the multiplayer version. You can share your network url with others on y
 
 ### Triangle Pong - local only for now.
 
-http://192.168.1.87:3000 
+http://192.168.1.87:3000/triangle.html 
 This is a re-imagined version that allows three players to play against each other. This version only works locally so three people on the same physcal maching using the same keyboard.
 <img width="1097" height="864" alt="image" src="https://github.com/user-attachments/assets/a4501d14-f30d-4c36-b7bf-6deaa11e7f84" />
 
