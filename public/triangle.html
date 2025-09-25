@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neon Retro Triangular Pong</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Press+Start+2P&display=swap');
+        
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+            font-family: 'Orbitron', sans-serif;
+            overflow: hidden;
+            color: #00ffff;
+        }
+        
+        #gameContainer {
+            position: relative;
+            width: 1000px;
+            height: 800px;
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.5);
+            border: 2px solid #ff00ff;
+            border-radius: 8px;
+        }
+        
+        #gameCanvas {
+            background: rgba(10, 10, 30, 0.8);
+            border-radius: 6px;
+        }
+        
+        #uiOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        
+        .player-info {
+            position: absolute;
+            font-size: 24px;
+            font-weight: bold;
+            text-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 8px 15px;
+            border: 1px solid #ff00ff;
+            border-radius: 8px;
+            box-shadow: 0 0 15px rgba(255, 0, 255, 0.7);
+        }
+        
+        #player1-info {
+            top: 30px;
+            left: 30px;
+            border-color: #ff9e00;
+            box-shadow: 0 0 15px rgba(255, 158, 0, 0.7);
+        }
+        
+        #player2-info {
+            top: 30px;
+            right: 30px;
+            border-color: #ff5400;
+            box-shadow: 0 0 15px rgba(255, 84, 0, 0.7);
+        }
+        
+        #player3-info {
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-color: #6a0572;
+            box-shadow: 0 0 15px rgba(106, 5, 114, 0.7);
+        }
+        
+        #gameStatus {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-family: 'Press Start 2P', cursive;
+            font-size: 48px;
+            font-weight: bold;
+            text-align: center;
+            text-shadow: 0 0 15px #ff00ff, 0 0 30px #ff00ff;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 30px;
+            border: 3px solid #00ffff;
+            border-radius: 15px;
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.8);
+            display: none;
+            z-index: 10;
+        }
+        
+        #countdown {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-family: 'Press Start 2P', cursive;
+            font-size: 120px;
+            color: #ff00ff;
+            text-shadow: 0 0 20px #ff00ff, 0 0 40px #ff00ff;
+            display: none;
+            z-index: 5;
+        }
+        
+        #instructions {
+            position: absolute;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #00ff9d;
+            font-size: 18px;
+            text-align: center;
+            text-shadow: 0 0 8px #00ff9d;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px 20px;
+            border-radius: 10px;
+            border: 1px solid #00ff9d;
+        }
+        
+        .neon-border {
+            position: absolute;
+            border: 2px solid #00ffff;
+            box-shadow: 0 0 10px #00ffff;
+            pointer-events: none;
+        }
+        
+        #top-border {
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+        }
+        
+        #left-border {
+            top: 0;
+            left: 0;
+            width: 3px;
+            height: 100%;
+        }
+        
+        #right-border {
+            top: 0;
+            right: 0;
+            width: 3px;
+            height: 100%;
+        }
+        
+        #bottom-border {
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div class="neon-border" id="top-border"></div>
+        <div class="neon-border" id="left-border"></div>
+        <div class="neon-border" id="right-border"></div>
+        <div class="neon-border" id="bottom-border"></div>
+        <canvas id="gameCanvas" width="1000" height="800"></canvas>
+        <div id="uiOverlay">
+            <div id="player1-info" class="player-info">PLAYER 1: ❤️❤️❤️❤️❤️❤️❤️❤️❤️❤️</div>
+            <div id="player2-info" class="player-info">PLAYER 2: ❤️❤️❤️❤️❤️❤️❤️❤️❤️❤️</div>
+            <div id="player3-info" class="player-info">PLAYER 3: ❤️❤️❤️❤️❤️❤️❤️❤️❤️❤️</div>
+            <div id="gameStatus"></div>
+            <div id="countdown"></div>
+            <div id="instructions">
+                PLAYER 1: A/D | PLAYER 2: J/L | PLAYER 3: ←/→
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Game constants
+        const LIVES = 10;
+        const PADDLE_LENGTH = 150;
+        const PADDLE_WIDTH = 20;
+        const BALL_RADIUS = 12;
+        const BALL_SPEED = 4; // Decreased from 6 to 4 for slower gameplay
+        const PADDLE_SPEED = 0.012;
+        
+        // Game state
+        const gameState = {
+            players: [
+                { lives: LIVES, active: true, keys: { left: false, right: false } },
+                { lives: LIVES, active: true, keys: { left: false, right: false } },
+                { lives: LIVES, active: true, keys: { left: false, right: false } }
+            ],
+            ball: {
+                x: 500,
+                y: 400,
+                dx: BALL_SPEED,
+                dy: BALL_SPEED,
+                radius: BALL_RADIUS
+            },
+            gameOver: false,
+            winner: null,
+            countdown: 0,
+            isCountingDown: false
+        };
+        
+        // Canvas setup
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const player1Info = document.getElementById('player1-info');
+        const player2Info = document.getElementById('player2-info');
+        const player3Info = document.getElementById('player3-info');
+        const gameStatus = document.getElementById('gameStatus');
+        const countdownDisplay = document.getElementById('countdown');
+        
+        // Calculate triangle vertices (equilateral triangle - larger)
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        const radius = Math.min(canvas.width, canvas.height) * 0.45; // Increased size
+        
+        const vertices = [
+            { x: centerX, y: centerY - radius }, // Top vertex
+            { x: centerX - radius * Math.sin(Math.PI/3), y: centerY + radius * 0.5 }, // Bottom left
+            { x: centerX + radius * Math.sin(Math.PI/3), y: centerY + radius * 0.5 }  // Bottom right
+        ];
+        
+        // Define edges that each player defends
+        const edges = [
+            { start: vertices[1], end: vertices[2] }, // Bottom edge - Player 1
+            { start: vertices[2], end: vertices[0] }, // Right edge - Player 2
+            { start: vertices[0], end: vertices[1] }  // Left edge - Player 3
+        ];
+        
+        // Paddle positions (0 to 1 along each edge)
+        const paddlePositions = [0.5, 0.5, 0.5];
+        
+        // Key mappings
+        const keyMap = {
+            // Player 1 (bottom edge): A/D
+            65: { player: 0, direction: -1 },   // A
+            68: { player: 0, direction: 1 },    // D
+            
+            // Player 2 (right edge): J/L
+            74: { player: 1, direction: -1 },   // J
+            76: { player: 1, direction: 1 },    // L
+            
+            // Player 3 (left edge): Left/Right arrows
+            37: { player: 2, direction: -1 },   // Left arrow
+            39: { player: 2, direction: 1 }     // Right arrow
+        };
+        
+        // Event listeners for keyboard
+        window.addEventListener('keydown', (e) => {
+            if (keyMap[e.keyCode]) {
+                const { player, direction } = keyMap[e.keyCode];
+                if (direction === -1) {
+                    gameState.players[player].keys.left = true;
+                } else {
+                    gameState.players[player].keys.right = true;
+                }
+            }
+        });
+        
+        window.addEventListener('keyup', (e) => {
+            if (keyMap[e.keyCode]) {
+                const { player, direction } = keyMap[e.keyCode];
+                if (direction === -1) {
+                    gameState.players[player].keys.left = false;
+                } else {
+                    gameState.players[player].keys.right = false;
+                }
+            }
+        });
+        
+        // Draw the triangular arena with neon effect
+        function drawArena() {
+            ctx.beginPath();
+            ctx.moveTo(vertices[0].x, vertices[0].y);
+            ctx.lineTo(vertices[1].x, vertices[1].y);
+            ctx.lineTo(vertices[2].x, vertices[2].y);
+            ctx.closePath();
+            
+            // Neon glow effect
+            ctx.shadowColor = '#00ffff';
+            ctx.shadowBlur = 20;
+            ctx.strokeStyle = '#00ffff';
+            ctx.lineWidth = 4;
+            ctx.stroke();
+            
+            // Reset shadow
+            ctx.shadowBlur = 0;
+        }
+        
+        // Get point along an edge at position t (0 to 1)
+        function getPointOnEdge(edge, t) {
+            return {
+                x: edge.start.x + t * (edge.end.x - edge.start.x),
+                y: edge.start.y + t * (edge.end.y - edge.start.y)
+            };
+        }
+        
+        // Draw a paddle aligned with its edge
+        function drawPaddle(playerIndex) {
+            if (!gameState.players[playerIndex].active) return;
+            
+            const edge = edges[playerIndex];
+            const t = paddlePositions[playerIndex];
+            
+            // Get center of paddle
+            const center = getPointOnEdge(edge, t);
+            
+            // Calculate edge direction vector
+            const dx = edge.end.x - edge.start.x;
+            const dy = edge.end.y - edge.start.y;
+            const edgeLength = Math.sqrt(dx * dx + dy * dy);
+            
+            // Normalize direction vector
+            const dirX = dx / edgeLength;
+            const dirY = dy / edgeLength;
+            
+            // Calculate perpendicular vector for paddle width
+            const perpX = -dirY;
+            const perpY = dirX;
+            
+            // Calculate four corners of the paddle
+            const halfLength = PADDLE_LENGTH / 2;
+            const halfWidth = PADDLE_WIDTH / 2;
+            
+            const corners = [
+                {
+                    x: center.x + dirX * (-halfLength) + perpX * (-halfWidth),
+                    y: center.y + dirY * (-halfLength) + perpY * (-halfWidth)
+                },
+                {
+                    x: center.x + dirX * (halfLength) + perpX * (-halfWidth),
+                    y: center.y + dirY * (halfLength) + perpY * (-halfWidth)
+                },
+                {
+                    x: center.x + dirX * (halfLength) + perpX * (halfWidth),
+                    y: center.y + dirY * (halfLength) + perpY * (halfWidth)
+                },
+                {
+                    x: center.x + dirX * (-halfLength) + perpX * (halfWidth),
+                    y: center.y + dirY * (-halfLength) + perpY * (halfWidth)
+                }
+            ];
+            
+            // Draw paddle with neon effect
+            ctx.beginPath();
+            ctx.moveTo(corners[0].x, corners[0].y);
+            ctx.lineTo(corners[1].x, corners[1].y);
+            ctx.lineTo(corners[2].x, corners[2].y);
+            ctx.lineTo(corners[3].x, corners[3].y);
+            ctx.closePath();
+            
+            // Player-specific colors with neon glow
+            let color;
+            let glowColor;
+            if (playerIndex === 0) {
+                color = '#ff9e00';
+                glowColor = 'rgba(255, 158, 0, 0.7)';
+            } else if (playerIndex === 1) {
+                color = '#ff5400';
+                glowColor = 'rgba(255, 84, 0, 0.7)';
+            } else {
+                color = '#6a0572';
+                glowColor = 'rgba(106, 5, 114, 0.7)';
+            }
+            
+            ctx.shadowColor = glowColor;
+            ctx.shadowBlur = 15;
+            ctx.fillStyle = color;
+            ctx.fill();
+            
+            ctx.shadowBlur = 0;
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+        
+        // Draw the ball with neon effect
+        function drawBall() {
+            ctx.beginPath();
+            ctx.arc(gameState.ball.x, gameState.ball.y, gameState.ball.radius, 0, Math.PI * 2);
+            
+            // Neon glow
+            ctx.shadowColor = '#f72585';
+            ctx.shadowBlur = 20;
+            ctx.fillStyle = '#f72585';
+            ctx.fill();
+            
+            ctx.shadowBlur = 0;
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+        
+        // Update paddle positions based on input
+        function updatePaddles() {
+            for (let i = 0; i < 3; i++) {
+                if (!gameState.players[i].active) continue;
+                
+                const player = gameState.players[i];
+                let newPos = paddlePositions[i];
+                
+                if (player.keys.left) {
+                    newPos -= PADDLE_SPEED;
+                }
+                if (player.keys.right) {
+                    newPos += PADDLE_SPEED;
+                }
+                
+                // Constrain to edge length (0 to 1)
+                paddlePositions[i] = Math.max(0, Math.min(1, newPos));
+            }
+        }
+        
+        // Check if ball hits an edge
+        function checkEdgeCollision() {
+            // For each edge of the triangle
+            for (let i = 0; i < 3; i++) {
+                const edge = edges[i];
+                const v1 = edge.start;
+                const v2 = edge.end;
+                
+                // Calculate distance from ball to edge
+                const A = v2.y - v1.y;
+                const B = v1.x - v2.x;
+                const C = v2.x * v1.y - v1.x * v2.y;
+                const distance = Math.abs(A * gameState.ball.x + B * gameState.ball.y + C) / 
+                                Math.sqrt(A * A + B * B);
+                
+                // If ball is close to the edge
+                if (distance < gameState.ball.radius) {
+                    // Check if the ball is actually near the segment
+                    const dot = (gameState.ball.x - v1.x) * (v2.x - v1.x) + 
+                               (gameState.ball.y - v1.y) * (v2.y - v1.y);
+                    const lenSq = (v2.x - v1.x) * (v2.x - v1.x) + 
+                                 (v2.y - v1.y) * (v2.y - v1.y);
+                    const param = dot / lenSq;
+                    
+                    if (param >= 0 && param <= 1) {
+                        // Calculate closest point on the edge
+                        const closestX = v1.x + param * (v2.x - v1.x);
+                        const closestY = v1.y + param * (v2.y - v1.y);
+                        
+                        // Check if ball is hitting the edge from inside
+                        const dx = gameState.ball.x - closestX;
+                        const dy = gameState.ball.y - closestY;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        
+                        if (dist < gameState.ball.radius) {
+                            // Handle collision
+                            if (gameState.players[i].active) {
+                                // Player is active - check if paddle is there
+                                const paddlePos = paddlePositions[i];
+                                const paddleRange = (PADDLE_LENGTH / 2) / Math.sqrt(lenSq);
+                                
+                                if (Math.abs(param - paddlePos) < paddleRange) {
+                                    // Ball hit the paddle - bounce
+                                    bounceBall(v1, v2);
+                                } else {
+                                    // Ball hit the edge without paddle - lose life
+                                    gameState.players[i].lives--;
+                                    updatePlayerLives(i);
+                                    
+                                    if (gameState.players[i].lives <= 0) {
+                                        gameState.players[i].active = false;
+                                        checkGameOver();
+                                    }
+                                    
+                                    // Start countdown
+                                    startCountdown();
+                                }
+                            } else {
+                                // Player is eliminated - just bounce
+                                bounceBall(v1, v2);
+                            }
+                            
+                            return; // Only handle one collision at a time
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Bounce the ball off an edge
+        function bounceBall(v1, v2) {
+            // Calculate normal vector to the edge (pointing inward)
+            const edgeX = v2.x - v1.x;
+            const edgeY = v2.y - v1.y;
+            const length = Math.sqrt(edgeX * edgeX + edgeY * edgeY);
+            
+            // Normal vector (perpendicular to edge, pointing inward)
+            const normalX = edgeY / length;
+            const normalY = -edgeX / length;
+            
+            // Calculate dot product of velocity and normal
+            const dot = gameState.ball.dx * normalX + gameState.ball.dy * normalY;
+            
+            // Reflect velocity
+            gameState.ball.dx -= 2 * dot * normalX;
+            gameState.ball.dy -= 2 * dot * normalY;
+            
+            // Add a little randomness to prevent predictable bounces
+            gameState.ball.dx += (Math.random() - 0.5) * 0.3; // Reduced randomness
+            gameState.ball.dy += (Math.random() - 0.5) * 0.3; // Reduced randomness
+            
+            // Normalize speed to maintain constant velocity
+            const speed = Math.sqrt(gameState.ball.dx * gameState.ball.dx + 
+                                   gameState.ball.dy * gameState.ball.dy);
+            if (speed > 0) {
+                gameState.ball.dx = (gameState.ball.dx / speed) * BALL_SPEED;
+                gameState.ball.dy = (gameState.ball.dy / speed) * BALL_SPEED;
+            }
+        }
+        
+        // Start the countdown sequence
+        function startCountdown() {
+            gameState.isCountingDown = true;
+            gameState.countdown = 3;
+            countdownDisplay.textContent = "3";
+            countdownDisplay.style.display = "block";
+            
+            // Hide the ball during countdown
+            gameState.ball.x = -100;
+            gameState.ball.y = -100;
+            
+            // Start countdown timer
+            const countdownInterval = setInterval(() => {
+                gameState.countdown--;
+                
+                if (gameState.countdown > 0) {
+                    countdownDisplay.textContent = gameState.countdown.toString();
+                    
+                    // Add pulse effect
+                    countdownDisplay.style.transform = "translate(-50%, -50%) scale(1.2)";
+                    setTimeout(() => {
+                        countdownDisplay.style.transform = "translate(-50%, -50%) scale(1)";
+                    }, 200);
+                } else {
+                    clearInterval(countdownInterval);
+                    countdownDisplay.style.display = "none";
+                    resetBall();
+                    gameState.isCountingDown = false;
+                }
+            }, 1000);
+        }
+        
+        // Reset ball to center with random direction
+        function resetBall() {
+            gameState.ball.x = centerX;
+            gameState.ball.y = centerY;
+            
+            // Random direction
+            const angle = Math.random() * Math.PI * 2;
+            gameState.ball.dx = Math.cos(angle) * BALL_SPEED;
+            gameState.ball.dy = Math.sin(angle) * BALL_SPEED;
+        }
+        
+        // Update player lives display
+        function updatePlayerLives(playerIndex) {
+            const hearts = '❤️'.repeat(gameState.players[playerIndex].lives);
+            const emptyHearts = '🖤'.repeat(LIVES - gameState.players[playerIndex].lives);
+            
+            if (playerIndex === 0) {
+                player1Info.innerHTML = `PLAYER 1: ${hearts}${emptyHearts}`;
+            } else if (playerIndex === 1) {
+                player2Info.innerHTML = `PLAYER 2: ${hearts}${emptyHearts}`;
+            } else {
+                player3Info.innerHTML = `PLAYER 3: ${hearts}${emptyHearts}`;
+            }
+        }
+        
+        // Check if game is over
+        function checkGameOver() {
+            const activePlayers = gameState.players.filter(p => p.active).length;
+            
+            if (activePlayers === 1) {
+                const winnerIndex = gameState.players.findIndex(p => p.active);
+                gameState.gameOver = true;
+                gameState.winner = winnerIndex + 1;
+                gameStatus.textContent = `PLAYER ${gameState.winner} WINS!`;
+                gameStatus.style.display = 'block';
+            } else if (activePlayers === 0) {
+                gameState.gameOver = true;
+                gameStatus.textContent = 'IT\'S A TIE!';
+                gameStatus.style.display = 'block';
+            }
+        }
+        
+        // Update game state
+        function update() {
+            if (gameState.gameOver || gameState.isCountingDown) return;
+            
+            updatePaddles();
+            
+            // Move ball
+            gameState.ball.x += gameState.ball.dx;
+            gameState.ball.y += gameState.ball.dy;
+            
+            // Check for edge collisions
+            checkEdgeCollision();
+        }
+        
+        // Render game
+        function render() {
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw arena
+            drawArena();
+            
+            // Draw paddles
+            for (let i = 0; i < 3; i++) {
+                drawPaddle(i);
+            }
+            
+            // Draw ball
+            if (!gameState.isCountingDown) {
+                drawBall();
+            }
+        }
+        
+        // Game loop
+        function gameLoop() {
+            update();
+            render();
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // Initialize game
+        function init() {
+            // Start game loop
+            gameLoop();
+        }
+        
+        // Start the game
+        init();
+    </script>
+</body>
+</html>
